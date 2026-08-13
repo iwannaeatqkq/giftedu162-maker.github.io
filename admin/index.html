@@ -1,1 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>광탈출 | 관리자 현황</title>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+    *{box-sizing:border-box}body{margin:0;background:#f3f8f7;color:#11313b;font-family:"Pretendard Variable",Pretendard,Arial,sans-serif}.w{max-width:1040px;margin:auto;padding:44px 18px}header{padding:36px;border-radius:22px;background:linear-gradient(130deg,#092f3c,#176b61);color:#fff;box-shadow:0 18px 48px #0b453c26}.tag{font-size:11px;font-weight:900;letter-spacing:.14em;color:#a8e9dc}h1{margin:10px 0;font-size:42px;letter-spacing:-.06em}header p{margin:0;color:#d7efea;line-height:1.6}.home{display:inline-flex;margin-top:20px;padding:10px 14px;border:1px solid #ffffff55;border-radius:999px;color:#fff;text-decoration:none;font-weight:800}.panel{margin-top:18px;padding:24px;border:1px solid #d8e8e5;border-radius:18px;background:#fff}.top{display:flex;justify-content:space-between;gap:12px;align-items:center}.top small{display:block;margin-top:5px;color:#70868d}.top input{padding:10px;border:1px solid #d4e1df;border-radius:9px;font:inherit}.k{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.k article{padding:16px;border-radius:13px;background:#f0f8f6}.k small{display:block;color:#58747a;font-weight:700}.k strong{display:block;margin:7px 0;font-size:28px;color:#0a655a}.rows{display:grid;gap:8px}.row{display:grid;grid-template-columns:52px 1fr 35px;gap:10px;align-items:center;font-size:12px}.bar{height:10px;overflow:hidden;border-radius:99px;background:#e8f1ef}.bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#35bfa8,#ff906d)}.note{margin-top:22px;padding:14px;border-radius:11px;background:#fff7e9;color:#785829;font-size:13px;line-height:1.6}.error{background:#fff1f0;color:#9f2f2a}.hidden{display:none}@media(max-width:650px){.w{padding:22px 14px}.k{grid-template-columns:1fr 1fr}.top{align-items:flex-start;flex-direction:column}h1{font-size:34px}}
+  </style>
+</head>
+<body>
+  <main class="w">
+    <header>
+      <span class="tag">GWANGTALCHUL · OPEN DASHBOARD</span>
+      <h1>관리자 홈페이지</h1>
+      <p>개인 위치·식별정보 없이, 선택 날짜의 익명 시간대 합계만 표시합니다.</p>
+      <a class="home" href="../">← 광탈출 일반 홈페이지</a>
+    </header>
+    <section class="panel">
+      <div class="top"><div><b>운영 현황</b><small id="u" aria-live="polite">불러오는 중…</small></div><label>조회 날짜 <input id="d" type="date"></label></div>
+      <p id="error" class="note error hidden" role="alert">실시간 통계 서버에 연결하지 못했습니다. 홈페이지 자체는 정상이며 잠시 후 자동으로 다시 연결합니다.</p>
+      <div class="k">
+        <article><small>접속 이용자</small><strong id="v">—</strong>명</article>
+        <article><small>도착 이동 결정</small><strong id="a">—</strong>건</article>
+        <article><small>출발 이동 결정</small><strong id="p">—</strong>건</article>
+        <article><small>최다 기록 시간</small><strong id="m">—</strong><span id="mc">—</span></article>
+      </div>
+      <h2>30분 단위 현황</h2>
+      <div class="rows" id="r"></div>
+      <p class="note">이 화면은 누구나 링크로 볼 수 있는 운영 현황입니다. 수치는 공개 API의 익명 합계이며, 실제 광안리 전체 현장 인원을 의미하지 않습니다.</p>
+    </section>
+  </main>
+  <script>
+    const API='https://gwangtalchul-crowd-guide.workspace-925535.chatgpt.site/api/visits';
+    const q=id=>document.getElementById(id);
+    const localDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const time=slot=>String(slot>>1).padStart(2,'0')+':'+(slot%2?'30':'00');
+    q('d').value=localDate(new Date());
+    async function load(){
+      try{
+        const response=await fetch(API+'?date='+encodeURIComponent(q('d').value),{cache:'no-store'});
+        if(!response.ok) throw new Error('HTTP '+response.status);
+        const data=await response.json();
+        const arrivals=data.arrival||Array(48).fill(0), departures=data.departure||Array(48).fill(0);
+        const rows=arrivals.map((value,index)=>({index,total:value+(departures[index]||0)}));
+        const maximum=Math.max(1,...rows.map(row=>row.total));
+        const peak=[...rows].sort((a,b)=>b.total-a.total)[0];
+        q('v').textContent=(data.visitors||0).toLocaleString();
+        q('a').textContent=arrivals.reduce((a,b)=>a+b,0).toLocaleString();
+        q('p').textContent=departures.reduce((a,b)=>a+b,0).toLocaleString();
+        q('m').textContent=peak.total?time(peak.index):'—';
+        q('mc').textContent=peak.total?peak.total+'건':'기록 없음';
+        q('r').innerHTML=rows.map(row=>`<div class="row"><span>${time(row.index)}</span><div class="bar"><i style="width:${row.total/maximum*100}%"></i></div><b>${row.total}</b></div>`).join('');
+        q('u').textContent=new Date().toLocaleTimeString('ko-KR')+' 갱신 · 30초마다 자동 업데이트';
+        q('error').classList.add('hidden');
+      }catch(error){
+        q('u').textContent='실시간 통계 연결을 다시 시도하는 중입니다.';
+        q('error').classList.remove('hidden');
+      }
+    }
+    q('d').addEventListener('change',load);
+    load();
+    setInterval(load,30000);
+  </script>
+</body>
+</html>
 <!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>광탈출 | 관리자 현황</title><style>@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');*{box-sizing:border-box}body{margin:0;background:#f3f8f7;color:#11313b;font-family:Pretendard Variable,Arial}.w{max-width:1040px;margin:auto;padding:44px 18px}header{padding:36px;border-radius:22px;background:linear-gradient(130deg,#092f3c,#176b61);color:#fff}.tag{font-size:11px;font-weight:900;letter-spacing:.14em;color:#a8e9dc}h1{margin:10px 0;font-size:42px;letter-spacing:-.06em}header p{margin:0;color:#d7efea}.panel{margin-top:18px;padding:24px;border:1px solid #d8e8e5;border-radius:18px;background:#fff}.top{display:flex;justify-content:space-between;gap:12px;align-items:center}.top small{display:block;margin-top:5px;color:#70868d}.top input{padding:10px;border:1px solid #d4e1df;border-radius:9px;font:inherit}.k{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.k article{padding:16px;border-radius:13px;background:#f0f8f6}.k small{display:block;color:#58747a;font-weight:700}.k strong{display:block;margin:7px 0;font-size:28px;color:#0a655a}.rows{display:grid;gap:8px}.row{display:grid;grid-template-columns:52px 1fr 35px;gap:10px;align-items:center;font-size:12px}.bar{height:10px;overflow:hidden;border-radius:99px;background:#e8f1ef}.bar i{display:block;height:100%;background:linear-gradient(90deg,#35bfa8,#ff906d)}.note{margin-top:22px;padding:14px;border-radius:11px;background:#fff7e9;color:#785829;font-size:13px;line-height:1.6}@media(max-width:650px){.k{grid-template-columns:1fr 1fr}.top{align-items:flex-start;flex-direction:column}h1{font-size:34px}}</style><main class="w"><header><span class="tag">GWANGTALCHUL · OPEN DASHBOARD</span><h1>관리자 홈페이지</h1><p>개인 위치·식별정보 없이, 선택 날짜의 익명 시간대 합계만 표시합니다.</p></header><section class="panel"><div class="top"><div><b>운영 현황</b><small id="u">불러오는 중…</small></div><input id="d" type="date"></div><div class="k"><article><small>접속 이용자</small><strong id="v">—</strong>명</article><article><small>도착 이동 결정</small><strong id="a">—</strong>건</article><article><small>출발 이동 결정</small><strong id="p">—</strong>건</article><article><small>최다 기록 시간</small><strong id="m">—</strong><span id="mc">—</span></article></div><h2>30분 단위 현황</h2><div class="rows" id="r"></div><p class="note">이 화면은 누구나 링크로 볼 수 있는 운영 현황입니다. 수치는 공개 API의 익명 합계이며, 실제 광안리 전체 현장 인원을 의미하지 않습니다.</p></section></main><script>const API='https://gwangtalchul-crowd-guide.workspace-925535.chatgpt.site/api/visits',q=id=>document.getElementById(id),I=x=>x.toISOString().slice(0,10),T=s=>String(s>>1).padStart(2,'0')+':'+(s%2?'30':'00');q('d').value=I(new Date);async function L(){try{let z=await fetch(API+'?date='+q('d').value,{cache:'no-store'});if(!z.ok)throw 0;let x=await z.json(),a=x.arrival||Array(48).fill(0),p=x.departure||Array(48).fill(0),r=a.map((v,i)=>({i,n:v+(p[i]||0)})),M=Math.max(1,...r.map(x=>x.n)),t=[...r].sort((x,y)=>y.n-x.n)[0];q('v').textContent=(x.visitors||0).toLocaleString();q('a').textContent=a.reduce((x,y)=>x+y,0).toLocaleString();q('p').textContent=p.reduce((x,y)=>x+y,0).toLocaleString();q('m').textContent=t.n?T(t.i):'—';q('mc').textContent=t.n?t.n+'건':'기록 없음';q('r').innerHTML=r.map(x=>'<div class=row><span>'+T(x.i)+'</span><div class=bar><i style="width:'+(x.n/M*100)+'%"></i></div><b>'+x.n+'</b></div>').join('');q('u').textContent=new Date().toLocaleTimeString('ko-KR')+' 갱신 · 30초마다 자동 업데이트'}catch(e){q('u').textContent='정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}}q('d').onchange=L;L();setInterval(L,30000)</script>
